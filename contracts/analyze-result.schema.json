@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudForgeAnalyzeResult",
+  "type": "object",
+  "required": [
+    "request_id",
+    "status",
+    "language",
+    "detector_evidence",
+    "limitations"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "PROCESSING",
+        "COMPLETED",
+        "PARTIAL",
+        "FAILED",
+        "EXPIRED",
+        "NOT_IMPLEMENTED"
+      ]
+    },
+    "language": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "route": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "detector_evidence": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "authenticity_assessment": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "scam_risk_assessment": {
+      "type": "string",
+      "enum": [
+        "NOT_ASSESSED",
+        "ASSESSED"
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

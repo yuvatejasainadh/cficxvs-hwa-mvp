@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CloudForgeAnalyzeRequest",
+  "type": "object",
+  "required": [
+    "request_id",
+    "audio_reference"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "audio_reference": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Reference/URI to audio; raw upload contract is not finalized."
+    },
+    "language_hint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "client_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,36 @@
+services:
+  orchestrator:
+    build: ./services/orchestrator
+    environment:
+      LID_BASE_URL: ${LID_BASE_URL:-http://vmc-lid:8001}
+      SOUTH_DETECTOR_BASE_URL: ${SOUTH_DETECTOR_BASE_URL:-http://vmc-south:8002}
+      ENGLISH_DETECTOR_BASE_URL: ${ENGLISH_DETECTOR_BASE_URL:-http://vmc-english:8003}
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-30}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - vmc-lid
+      - vmc-south
+      - vmc-english
+
+  vmc-lid:
+    build: ./services/vmc-lid
+    environment:
+      MODEL_ID: onecxi/open-vakgyata
+      MODEL_REVISION: main
+    ports:
+      - "8001:8001"
+
+  vmc-south:
+    build: ./services/vmc-south
+    environment:
+      MODEL_STATUS: not_configured
+    ports:
+      - "8002:8002"
+
+  vmc-english:
+    build: ./services/vmc-english
+    environment:
+      MODEL_STATUS: not_configured
+    ports:
+      - "8003:8003"
