@@ -202,7 +202,7 @@ This layout is intended to keep the API, model services, contracts, tests, and d
 - Document supported languages, limitations, and threshold-calibration status.
 - Coordinate a stable interface for integration with the orchestrator.
 
-### Pallavi — Cloud Engineer
+### Koduru Pallavi — Cloud Engineer
 
 **Primary ownership: Open Vakgyata language-identification service**
 
@@ -214,7 +214,7 @@ This layout is intended to keep the API, model services, contracts, tests, and d
 - Document language coverage, model limitations, and readiness status.
 - Review the model license before any commercial use.
 
-### Varshu — Cloud Engineer
+### Gude Kanaka Sri Varshini — Cloud Engineer
 
 **Primary ownership: English detector and gateway integration support**
 
