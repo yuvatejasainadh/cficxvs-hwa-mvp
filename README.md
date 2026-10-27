@@ -1,253 +1,162 @@
 # CloudForge Intelligence Core for VoiceShield (CFIC × VS)
 
-### HackWithAditya · MVP / HackVersion
+**TEAM SAIL · HackWithAditya 2026**  
+**Primary theme:** Cybersecurity, FinTech & Digital Trust  
+**Technical differentiator:** Language-aware AI infrastructure for voice security  
+**Repository:** https://github.com/yuvatejasainadh/cficxvs-hwa-mvp
 
-**A common distributed intelligence infrastructure for VoiceShield across mobile applications, web applications, APIs, SDKs, telephony, and VoIP integrations.**
-
----
-
-## 1. Project Overview
-
-**CloudForge Intelligence Core for VoiceShield (CFIC × VS)** is a distributed intelligence infrastructure designed to provide a common, modular, and extensible processing layer for VoiceShield's voice impersonation and deepfake detection capabilities.
-
-The platform aims to separate application-facing integrations from AI inference services. Instead of requiring every client application to implement its own language identification, model selection, and inference orchestration, CFIC provides a shared API and coordinated service pipeline.
-
-For the HackWithAditya MVP, the project focuses on establishing a practical, testable end-to-end path from an audio analysis request to a structured detection result.
-
-The implementation begins with a limited, validated inference path rather than attempting to deploy every planned model, region, or integration at once.
-
-### Core objectives
-
-- Establish a common API contract for VoiceShield clients.
-- Identify the language of a supported audio recording.
-- Route supported requests to an appropriate validated detector.
-- Coordinate inference through a central orchestrator.
-- Return consistent, structured analysis results.
-- Keep model services modular and independently deployable.
-- Establish a foundation for future distributed deployment and multi-channel integration.
+> **Project in one line:** CFIC is the shared inference and orchestration layer for VoiceShield that identifies the language of incoming audio, routes it to an appropriate validated audio-spoofing detector, and returns a consistent, traceable result.
 
 ---
 
-## 2. Problem Statement
+## 1. Problem Statement
 
-VoiceShield may be integrated into different environments, including Android applications, web applications, APIs, SDKs, telephony, and VoIP systems.
+AI-generated speech, voice cloning, and audio spoofing can undermine trust in voice-based communication and identity checks. At the same time, integrating language identification and specialized detection models separately into every client can duplicate routing logic, fragment service interfaces, and make model updates harder to manage.
 
-Without a shared intelligence layer, each integration may need to manage its own inference requests, model interfaces, routing rules, and response handling. This can lead to duplicated integration logic, inconsistent responses, and difficulty replacing or upgrading individual models.
+**VoiceShield needs a unified, language-aware inference layer** that can identify the language of an audio request, select an appropriate validated detector, and return a consistent result through one interface. It must also handle uncertain language predictions, unsupported languages, invalid audio, and model-service failures explicitly rather than silently selecting an unsuitable model or returning fabricated scores.
 
-**CFIC × VS addresses this architectural challenge by introducing a common orchestration and inference interface between VoiceShield clients and specialized AI services.**
+CFIC addresses this infrastructure problem by coordinating language identification and specialized audio-spoofing detection behind a common API.
 
-The MVP will validate this architecture through a controlled audio-analysis pipeline, with explicit handling of unsupported inputs, unavailable services, and inference failures.
+## 2. Proposed Solution
 
----
+CFIC separates VoiceShield client integrations from the model-serving layer. A central orchestrator validates and coordinates each request, calls the language-identification service, applies an explicit routing policy, invokes the selected detector, and returns a normalized result with request and model metadata where available.
 
-## 3. MVP Architecture
+The project combines:
+- **Cybersecurity:** supports VoiceShield's audio-spoofing analysis workflow.
+- **Multilingual AI:** uses language identification to inform detector selection.
+- **Cloud engineering:** separates services into containerized components with defined contracts.
+- **Responsible inference:** makes unsupported cases and failures explicit and distinguishes real model outputs from prototype mocks.
+
+CFIC is infrastructure for audio-spoofing detection; it is **not itself a new detection model**, and a detector score must not be interpreted as a calibrated fraud probability unless evaluation supports that interpretation.
+
+## 3. Target Users
+
+- VoiceShield Android and web application users.
+- VoiceShield application and backend developers.
+- Product teams integrating voice-analysis functionality into their applications or services.
+
+## 4. Architecture and Fixed Model Scope
+
+The HackVersion has **exactly three model services**. The orchestrator coordinates them and is not a fourth model.
+
+1. **Open-Vakgyata LID** — language identification.
+2. **VMC-South fine-tuned AASIST-L** — audio-spoofing detection for the validated South Indian language scope.
+3. **AASIST-L English/fallback** — English detection and only those fallback cases explicitly approved by the routing policy.
 
 ```text
 VoiceShield Android / Web
           |
+          | HTTPS / REST
           v
-Existing VoiceShield API Gateway
-(if configured)
+CFIC API + Orchestrator
+          |
+          | Internal model-service calls
+          v
+Open-Vakgyata Language Identification
           |
           v
-CloudForge API / Orchestrator
+Explicit, confidence-aware routing policy
           |
-          v
-Language Identification (LID)
-          |
-          v
-Routing Policy
-          |
-          +----------------------+
-          |                      |
-          v                      v
-South Indian Detector     English Detector
-(VM2_SOUTH)               (VM2_ENGLISH / fallback)
-          |                      |
-          +-----------+----------+
-                      |
-                      v
-             Result Aggregation
-                      |
-                      v
-          Structured Analysis Result
-                      |
-                      v
-          VoiceShield Android / Web
+          +------------------------------+
+          |                              |
+          v                              v
+VMC-South fine-tuned AASIST-L    AASIST-L English/fallback
+          |                              |
+          +---------------+--------------+
+                          v
+             Normalized analysis result
+                          |
+                          v
+                 VoiceShield client
 ```
 
-The English detector is a separate service in the initial scaffold. Whether it is used as a fallback for a particular language must be determined by the validated routing policy; unsupported languages must not silently receive misleading predictions.
+### Routing principles
 
-The architecture describes the intended pipeline. The current repository contains service scaffolds, not a fully operational inference pipeline.
+- Confident language result within the South model's validated scope → VMC-South.
+- Confident English result → English detector when enabled by policy.
+- Low-confidence language result → documented abstain, retry, or specifically approved fallback behavior.
+- Unsupported language → explicit unsupported response unless an approved, evaluated route exists.
+- LID or detector failure → controlled error; never guess a language or fabricate a score.
+- Mock mode, if used for the MVP demonstration, must be visibly labelled in the response and demo.
 
-### Proposed service responsibilities
+### Protocol boundary
 
-| Component | Responsibility |
-|---|---|
-| VoiceShield clients | Submit analysis requests and consume results |
-| Existing API gateway | Authentication, request validation, rate limiting, and secure forwarding, if configured |
-| Orchestrator | Coordinate service calls, routing, errors, and result aggregation |
-| VM1_LID | Identify the language of supported audio |
-| VM2_SOUTH | Provide validated South Indian-scope anti-spoofing inference |
-| VM2_ENGLISH | Provide validated English-scope anti-spoofing inference |
-| Shared contracts | Standardize request and response formats |
+The initial repository scaffold uses HTTP/FastAPI interfaces. The HackVersion target is HTTPS/REST from VoiceShield to CFIC and versioned protobuf/gRPC for internal orchestrator-to-model calls. This is a planned integration boundary, **not a claim that the current scaffold already uses gRPC**. Any migration must be implemented deliberately, with shared contracts and tests updated together.
 
----
+## 5. MVP and HackVersion: Different Delivery Targets
 
-## 4. Technology Stack
+| Area | MVP / Level 1 prototype | HackVersion / complete target |
+|---|---|---|
+| Purpose | Reproducible prototype demonstrating the request-to-result flow | Fully integrated, cloud-hosted inference pipeline |
+| Models | Real components where integrated; mocks allowed only when clearly labelled | All three actual model services |
+| Routing | Demonstrate explicit routing and controlled failure behavior | Real LID-driven routing to the validated detector |
+| API | Shared request/result contract and working prototype path | HTTPS API integrated with VoiceShield |
+| Internal calls | Current scaffold interfaces, documented honestly | Agreed protobuf/gRPC contracts |
+| Deployment | Reproducible local Docker Compose setup | Cloud deployment using tested, versioned containers |
+| Evidence | Tests and demo clearly distinguish implemented features from mocks | End-to-end real-audio evidence and model evaluation/limitations |
 
-The initial scaffold uses the following technologies:
+**Release rule:** Do not describe the system as a fully working HackVersion until actual model inference, routing, VoiceShield integration, and cloud deployment have been demonstrated end to end.
 
-- **Python** — service implementation
-- **FastAPI** — HTTP APIs for the orchestrator and model services
-- **Docker** — service containerization
-- **Docker Compose** — local multi-service development
-- **JSON Schema** — shared request and response contract definitions
-- **pytest** — automated scaffold and contract tests
+## 6. Technology Stack
 
-### Planned integration components
+The initial scaffold uses:
 
-The following are integration targets, not claims that they are already implemented:
+- **Python** — service implementation.
+- **FastAPI** — HTTP APIs for the orchestrator and model-service scaffolds.
+- **Docker** — containerization.
+- **Docker Compose** — local multi-service development.
+- **JSON Schema** — initial request/response contracts.
+- **pytest** — automated tests.
 
-- Open Vakgyata for language identification
-- A validated AASIST-L artifact for the South Indian detector
-- A validated AASIST-L artifact or explicitly approved English-only detector path
-- Existing VoiceShield API gateway
-- Redis and background workers if asynchronous job processing is required by the finalized acceptance criteria
-- Cloud deployment and service-to-service security as later implementation milestones
+Target components and requirements:
+- Open-Vakgyata model artifact/runtime for LID.
+- Validated fine-tuned AASIST-L artifact for VMC-South.
+- Actual AASIST-L artifact/runtime for the English/fallback service.
+- Versioned protobuf/gRPC contracts for internal model calls in the HackVersion.
+- HTTPS and deployment-appropriate authentication for external VoiceShield-to-CFIC traffic.
+- Cloud container hosting for the completed HackVersion.
 
-The initial scaffold uses HTTP/FastAPI interfaces. Any change to gRPC or protobuf should be agreed upon and reflected in the shared contracts before implementation diverges across team members.
+The precise cloud provider, hardware/GPU requirements, dependency versions, model revisions, and environment variables must be documented from the tested deployment before submission. Do not infer them from this README.
 
----
-
-## 5. Repository Structure
+## 7. Repository Structure
 
 ```text
 cficxvs-hwa-mvp/
 ├── README.md
-├── .gitignore
 ├── .env.example
 ├── docker-compose.yml
 ├── Makefile
-│
 ├── contracts/
 │   ├── analyze-request.schema.json
 │   ├── analyze-result.schema.json
 │   └── README.md
-│
 ├── services/
 │   ├── orchestrator/
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── app/
-│   │       └── main.py
-│   │
 │   ├── vmc-lid/
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── app/
-│   │       └── main.py
-│   │
 │   ├── vmc-south/
-│   │   ├── Dockerfile
-│   │   ├── requirements.txt
-│   │   └── app/
-│   │       └── main.py
-│   │
 │   └── vmc-english/
-│       ├── Dockerfile
-│       ├── requirements.txt
-│       └── app/
-│           └── main.py
-│
 ├── tests/
-│   └── test_scaffold_contract.py
-│
 └── docs/
-    ├── architecture.md
-    ├── api-contract.md
-    ├── team-assignments.md
-    └── local-setup.md
 ```
 
-This layout is intended to keep the API, model services, contracts, tests, and documentation separated so each team member can work on an assigned component without modifying unrelated services.
+The structure above is a high-level map. Check the current repository for the exact files and test dependencies.
 
----
-
-## 6. Team Responsibilities
-
-### Yuvateja Sainadh Kasukurthi — Applied AI Engineer, Systems Architect & Cloud Infrastructure Architect
-
-**Primary ownership: CFIC architecture and end-to-end integration**
-
-- Define and maintain the overall MVP architecture.
-- Finalize shared request and result contracts.
-- Implement orchestrator routing and result aggregation.
-- Coordinate the LID-to-detector service path.
-- Define job lifecycle and error-handling behavior.
-- Integrate the existing VoiceShield gateway where available.
-- Define Android and web adapter requirements.
-- Coordinate local infrastructure and deployment planning.
-- Perform end-to-end tests after the real model services are integrated.
-- Prepare the technical demonstration and document limitations.
-
-### Padavala Varun Ranga Rao — MLOps Architect & ML Infrastructure Engineer
-
-**Primary ownership: South Indian detector**
-
-- Fine-tune and evaluate AASIST-L for the agreed South Indian scope.
-- Define audio preprocessing, sample-rate requirements, and model input/output.
-- Deliver a versioned model artifact and reproducible inference entry point.
-- Provide baseline evaluation evidence.
-- Document supported languages, limitations, and threshold-calibration status.
-- Coordinate a stable interface for integration with the orchestrator.
-
-### Koduru Pallavi — Cloud Engineer
-
-**Primary ownership: Open Vakgyata language-identification service**
-
-- Package the Open Vakgyata LID service in Docker.
-- Integrate the actual model artifact and inference runtime.
-- Validate model labels against the model card.
-- Define and test audio preprocessing and service input/output.
-- Add health checks, startup validation, configuration, and useful logs.
-- Document language coverage, model limitations, and readiness status.
-- Review the model license before any commercial use.
-
-### Gude Kanaka Sri Varshini — Cloud Engineer
-
-**Primary ownership: English detector and gateway integration support**
-
-- Package the agreed English AASIST-L detector or approved fallback path.
-- Define the service interface and audio preprocessing requirements.
-- Validate inference behavior using known test recordings.
-- Support gateway integration and request-validation tests.
-- Test HTTPS request submission and result retrieval where configured.
-- Support WebSocket integration only if it is included in the agreed MVP scope.
-- Document detector limitations and unsupported-language behavior.
-
-**Shared rule:** Agree on the service contract, audio format, preprocessing, error schema, and model readiness criteria before merging the components.
-
----
-
-## 7. Local Development
+## 8. Quick Start: Local Prototype
 
 ### Prerequisites
 
-- Git
-- Docker Desktop with Docker Compose
-- Python 3.11 or a compatible Python environment for running tests directly
+- Git.
+- Docker Desktop or Docker Engine with Docker Compose.
+- Python 3.11 or a compatible Python environment if running tests outside containers.
 
-### Start the services
-
-Clone the repository and enter its directory:
+### Clone and start
 
 ```bash
 git clone https://github.com/yuvatejasainadh/cficxvs-hwa-mvp.git
 cd cficxvs-hwa-mvp
 ```
 
-Create the local environment file:
+Create a local environment file.
 
 **Windows CMD**
 ```cmd
@@ -259,183 +168,210 @@ copy .env.example .env
 cp .env.example .env
 ```
 
-Review the environment values and start the services:
+Review `.env` and configure any required values before starting:
 
 ```bash
 docker compose up --build
 ```
 
-### Local service endpoints
+If the repository's current Compose configuration exposes these ports, the local endpoints are:
 
-| Service | Local endpoint |
+| Service | Endpoint |
 |---|---|
 | Orchestrator | `http://localhost:8000` |
-| LID | `http://localhost:8001` |
-| South detector | `http://localhost:8002` |
-| English detector | `http://localhost:8003` |
+| LID service | `http://localhost:8001` |
+| South detector service | `http://localhost:8002` |
+| English detector service | `http://localhost:8003` |
 
-Health checks:
-
+Health endpoints, if enabled by the current service implementation:
 - `http://localhost:8000/healthz`
 - `http://localhost:8001/healthz`
 - `http://localhost:8002/healthz`
 - `http://localhost:8003/healthz`
 
-Orchestrator API documentation:
+Orchestrator API documentation, if enabled:
+- `http://localhost:8000/docs`
 
-`http://localhost:8000/docs`
-
-**Important:** These health checks currently indicate process health only. They do not prove that model weights are loaded or that inference is operational.
-
-Stop the services with:
+Stop the local services:
 
 ```bash
 docker compose down
 ```
 
----
+**Important:** A successful container start or process-health response does not prove that model weights are loaded or that inference is working. Verify the current implementation and model-readiness behavior before using these endpoints as evidence in a submission.
 
-## 8. Testing
+## 9. Tests and Validation
 
-Install the test dependencies:
-
-```bash
-python -m pip install -r tests/requirements.txt
-```
-
-Run the current scaffold tests:
+Install test dependencies using the repository's current test requirements file, if present, then run:
 
 ```bash
 python -m pytest tests -q
 ```
 
-The scaffold tests validate the initial structure and contract behavior. They do not prove that the real LID model or detector models are accurate or integrated.
+Run commands from a clean clone before relying on them in the submission. Update this section if the actual repository uses a different test path or setup command.
 
 ### Required validation layers
 
-1. **Unit tests** — validate individual functions and service behavior.
-2. **Contract tests** — verify that services follow the shared request and response schemas.
-3. **Component tests** — validate each real model service using known recordings.
-4. **Integration tests** — verify communication between the orchestrator, LID, and selected detector.
-5. **End-to-end tests** — submit a supported recording through the complete client-to-result path.
+1. **Unit tests** — validate routing, validation, and error-handling functions.
+2. **Contract tests** — verify request and response schemas.
+3. **Model component tests** — use known recordings to verify each real model service.
+4. **Integration tests** — verify the orchestrator's calls to LID and the selected detector.
+5. **End-to-end tests** — demonstrate VoiceShield → CFIC → LID → detector → normalized result.
 
-End-to-end completion must be demonstrated with actual model inference, not only mocked responses or successful health checks.
+### Required behavior matrix
 
----
+| Scenario | Expected behavior |
+|---|---|
+| Supported South language, confident LID | Invoke South detector only if that language is validated |
+| English, confident LID | Invoke English detector when enabled by policy |
+| Unsupported language | Explicit unsupported response or approved documented policy |
+| Low-confidence LID | Documented abstain/retry/approved fallback; no arbitrary routing |
+| Invalid or corrupt audio | Controlled validation error |
+| LID unavailable or times out | Controlled service error; no guessed language |
+| Detector unavailable or times out | Controlled service error; no fabricated score |
+| Mock inference | Clearly label the response as mocked/demo output |
+| Real inference | Identify actual model/version and inference status where available |
 
-## 9. MVP Acceptance Criteria
+## 10. HackWithAditya Submission Readiness
 
-The MVP should not be considered complete until the following are demonstrated:
+The project submission should include the required team/member details and project title, problem statement, target users, abstract/project document, working prototype, feature and limitation list, GitHub repository with reproducible setup steps, a demo video under five minutes, and the actual tech stack, hardware/runtime requirements, and dependencies.
 
-- [ ] Android and web integrations follow the agreed shared API contract.
-- [ ] Valid requests receive the agreed request or job identifier.
-- [ ] Invalid or unauthorized requests are rejected when gateway authentication is configured.
-- [ ] The real LID model identifies supported test recordings correctly enough for the documented acceptance criteria.
-- [ ] A supported recording completes the validated LID-to-detector inference path.
-- [ ] Detector responses follow the shared result schema.
-- [ ] Unsupported inputs, malformed audio, timeouts, and service failures produce controlled errors.
-- [ ] Routing does not silently apply an unvalidated detector to unsupported languages.
-- [ ] Model versions, preprocessing, evaluation evidence, and limitations are documented.
-- [ ] Integration and end-to-end tests pass against the real services.
-- [ ] The demonstration distinguishes implemented features from future work.
+### Judging alignment
 
----
+- **Problem relevance:** explain the voice-spoofing and digital-trust problem.
+- **Prototype credibility:** demonstrate a real request, actual outputs, tests, and clearly labelled mocks.
+- **48-hour feasibility:** keep the three-model scope fixed and the baseline runnable.
+- **Technical clarity:** explain the API contract, routing policy, service boundaries, failure behavior, and score limitations.
+- **Originality:** clearly distinguish TEAM SAIL's architecture and implementation from external models, libraries, templates, and adapted code.
 
-## 10. Scope Boundaries
+For Level 2, the organizers will announce **two mandatory enhancements and one optional stretch goal** at the event. Do not assume or invent those requirements in advance. Keep a clean baseline, assign clear owners, test incrementally, and make coherent commits to the shared repository at least every three hours during the on-site build.
 
-### Included in the initial HackVersion
+## 11. Demo Plan: Under Five Minutes
 
-- A common API contract
-- A minimal orchestrator
-- One real language-identification service
-- One validated South Indian detector path
-- A separately defined English detector path
-- Docker-based local development
-- Basic automated tests
-- Controlled failure handling
-- A demonstrable end-to-end analysis flow
+1. **0:00–0:30 — Problem:** why VoiceShield needs a common, language-aware inference layer.
+2. **0:30–1:00 — Architecture:** show the three model services and explicit routing policy.
+3. **1:00–2:00 — Live request:** submit a prepared, non-sensitive test recording and show request ID, language result, route, and output status.
+4. **2:00–3:00 — Engineering evidence:** show containers, tests, contracts, and the real inference path that exists in the current build.
+5. **3:00–4:00 — Failure/limitations:** demonstrate invalid audio or an unsupported/low-confidence case; explain how mocks are labelled.
+6. **4:00–5:00 — Value and close:** state what is implemented, what is validated, what remains, and why the system can be extended during the 48-hour challenge.
 
-### Deferred unless explicitly required
+Record the actual current build. Never imply that mocked inference is real. Do not show credentials, private audio, secrets, or sensitive dataset information.
 
-- All seven planned VM/model groups
-- Full RIAS/TCED implementation
-- Production-grade autoscaling and high availability
-- Broad live-call, telephony, and VoIP integration
-- Full production AWS/EKS deployment
-- Unvalidated scam classification
-- Any model routing path that lacks evaluation evidence
+## 12. Security, Privacy, and Model Limitations
 
-The HackVersion prioritizes a working, explainable, validated pipeline over the number of services or technologies displayed in the architecture.
-
----
-
-## 11. Security, Privacy, and Model Limitations
-
-- Never commit API keys, credentials, private endpoints, or secrets to Git.
-- Keep environment-specific settings in local environment files and deployment secret stores.
-- Do not commit model weights unless licensing, repository size, and distribution requirements permit it.
-- Review the Open Vakgyata model's non-commercial license before commercial use.
+- Never commit API keys, credentials, tokens, private endpoints, or secrets.
+- Use environment variables and deployment secret stores for configuration.
+- Do not commit model weights unless license terms, artifact size, and distribution requirements permit it.
+- Verify and document each model's source, version/revision, license, supported language scope, and limitations.
+- Review the Open-Vakgyata model license before any commercial use.
 - Document audio retention and deletion behavior before processing real user recordings.
-- Avoid logging raw audio or sensitive personal data.
-- Do not treat a healthy service process as proof that model inference is ready.
-- Do not describe a deepfake score as proof that a caller is a scammer.
-- Document detector thresholds and calibration status instead of presenting unvalidated scores as reliable probabilities.
+- Avoid logging raw audio or sensitive personal information.
+- Apply input size/duration limits, timeouts, and appropriate request validation.
+- Keep internal gRPC services on a private network in the deployed HackVersion; expose only the secured external API.
+- Distinguish process health from model readiness.
+- Do not call an uncalibrated spoof score a probability of fraud or proof that a caller is a scammer.
+- Clearly label any mocked model output as `MOCKED_FOR_DEMO` or an equivalent explicit status.
 
-Voice impersonation detection and scam classification are different tasks. CFIC × VS must report only what the integrated and evaluated models support.
+## 13. Team Responsibilities
+
+### Yuvateja Sainadh Kasukurthi — Systems Architect and Integration Lead
+- Own overall CFIC architecture, shared contracts, orchestration, routing, result normalization, and failure behavior.
+- Coordinate integration with the existing VoiceShield gateway where available.
+- Run end-to-end validation and prepare the technical demo.
+- Maintain the scope and ensure the implementation matches the submitted claims.
+
+### Padavala Varun Ranga Rao — South Detector / MLOps
+- Fine-tune and evaluate the agreed South-scope AASIST-L model.
+- Deliver a versioned artifact and reproducible inference entry point.
+- Document preprocessing, supported languages, evaluation evidence, thresholds, and limitations.
+- Coordinate containerization and the detector service interface.
+
+### Koduru Pallavi — Language Identification Service
+- Integrate and containerize the actual Open-Vakgyata LID artifact/runtime.
+- Validate labels, preprocessing, language coverage, health/readiness, and error behavior.
+- Document model provenance, license, and limitations.
+
+### Gude Kanaka Sri Varshini — English Detector and Cloud Integration Support
+- Package the agreed English AASIST-L detector path.
+- Validate preprocessing and inference against known test recordings.
+- Support gateway/request-validation tests and deployment readiness.
+- Document model limitations and unsupported-language behavior.
+
+All members should be able to explain their component, tests, contracts, dependencies, external model/code sources, and which features are real, mocked, or planned.
+
+## 14. AI, External Code, and Originality Disclosure
+
+HackWithAditya permits coding assistants and AI APIs subject to disclosure. Before submission, TEAM SAIL must complete an accurate disclosure of:
+- AI tools used, what they assisted with, and human review/testing performed.
+- External libraries and frameworks, versions, purposes, and licenses.
+- External model names, sources, revisions, licenses/usage terms, supported languages, and known limitations.
+- Code copied or adapted from documentation, examples, repositories, or templates.
+- Each team member's ownership and understanding of their submitted work.
+
+Do not claim external model weights, libraries, or adapted code as original work. Ensure the team can explain every submitted component.
+
+## 15. Feature Status and Project Honesty
+
+Use one of these statuses for each feature in the submission and demo:
+
+- `IMPLEMENTED_AND_TESTED`
+- `IMPLEMENTED_NOT_FULLY_VALIDATED`
+- `MOCKED_FOR_PROTOTYPE`
+- `PLANNED_NOT_IMPLEMENTED`
+
+A directory, Dockerfile, API route, schema, health endpoint, or mock response alone does not prove that real model inference is complete.
+
+**Current implementation status must be verified against the actual repository before submission.** Update the status below based on tested evidence; do not leave a scaffold described as a fully operational pipeline.
+
+| Capability | Status | Evidence / notes |
+|---|---|---|
+| Common API and request/result contracts | To verify | Link tests or demo evidence |
+| Open-Vakgyata real LID inference | To verify | Record model revision and test evidence |
+| VMC-South real AASIST-L inference | To verify | Record artifact version and evaluation evidence |
+| English AASIST-L real inference | To verify | Record artifact version and evaluation evidence |
+| Real LID-driven routing | To verify | Link integration test |
+| Controlled unsupported/error paths | To verify | Link tests or demo evidence |
+| Cloud-hosted end-to-end VoiceShield flow | To verify | Record deployment and real-audio test evidence |
+
+## 16. Roadmap
+
+### Phase 1 — Reproducible MVP
+- Freeze shared request/result contracts and routing rules.
+- Ensure a clean checkout starts locally.
+- Test request validation, request IDs, and controlled errors.
+- Label any mocked inference explicitly.
+
+### Phase 2 — Real model services
+- Integrate and validate Open-Vakgyata LID.
+- Integrate and validate the fine-tuned South AASIST-L detector.
+- Integrate and validate the English AASIST-L detector.
+- Add model-readiness checks and model/version metadata.
+
+### Phase 3 — End-to-end HackVersion
+- Implement real LID-driven routing and normalized results.
+- Finalize internal protobuf/gRPC contracts and external HTTPS integration.
+- Deploy tested, versioned containers to the cloud.
+- Verify the complete VoiceShield-to-CFIC-to-detector-to-VoiceShield path.
+
+### Phase 4 — Level 2 enhancement challenge
+- Preserve a clean, runnable baseline.
+- Convert the exact organizer brief into acceptance criteria.
+- Complete both mandatory enhancements before attempting the optional stretch.
+- Test, integrate, document, and demonstrate the actual changes.
+
+### Future productionization
+Further detector groups, broader telephony/VoIP integration, autoscaling, and high availability are future extensions, not part of the fixed three-model HackVersion scope.
 
 ---
 
-## 12. Future Roadmap
+## 17. Project Identity
 
-### Phase 1 — Scaffold and contracts
-- [x] Create the initial service structure.
-- [x] Define initial request/result schemas.
-- [x] Add Docker-based local development.
-- [ ] Freeze service interfaces and routing rules.
+- **Project:** CloudForge Intelligence Core for VoiceShield
+- **Short name:** CFIC × VS
+- **Team:** TEAM SAIL
+- **Hackathon:** HackWithAditya 2026
+- **Primary theme:** Cybersecurity, FinTech & Digital Trust
+- **Technical differentiator:** Language-aware AI routing
+- **Repository:** https://github.com/yuvatejasainadh/cficxvs-hwa-mvp
 
-### Phase 2 — Real model integration
-- [ ] Integrate and validate Open Vakgyata.
-- [ ] Integrate the agreed South Indian AASIST-L artifact.
-- [ ] Integrate and validate the English detector path.
-- [ ] Add model readiness checks.
-
-### Phase 3 — Orchestration and integration
-- [ ] Implement real LID-to-detector routing.
-- [ ] Implement consistent result aggregation and error handling.
-- [ ] Integrate the existing gateway where available.
-- [ ] Add job lifecycle and Redis workers if required by the final acceptance criteria.
-
-### Phase 4 — Validation and demonstration
-- [ ] Run component and contract tests.
-- [ ] Run end-to-end tests with supported recordings.
-- [ ] Record evaluation evidence and known limitations.
-- [ ] Demonstrate the working VoiceShield-to-CFIC pipeline.
-
-### Phase 5 — Future productionization
-- Evaluate cloud deployment and service-to-service security.
-- Add further validated detector groups as justified.
-- Explore broader application, SDK, telephony, and VoIP integrations.
-- Evaluate scaling, resilience, observability, and operational requirements.
-
----
-
-## 13. Project Status
-
-**Current status: Initial scaffold created; real inference integration pending.**
-
-The repository establishes the starting structure for the CloudForge Intelligence Core for VoiceShield HackWithAditya MVP. The API services and contracts provide a foundation for parallel development, but the real model artifacts, routing pipeline, gateway integration, and end-to-end inference must be implemented and validated before the project can be described as a functioning MVP.
-
----
-
-## 14. Project Identity
-
-**Project name:** CloudForge Intelligence Core for VoiceShield  
-**Short name:** CFIC × VS  
-**Repository:** `cficxvs-hwa-mvp`  
-**Program:** HackWithAditya  
-**Core focus:** Distributed intelligence infrastructure for voice impersonation detection  
-**Primary objective:** A common, modular, validated AI inference path for VoiceShield integrations
-
----
-
-*CloudForge Intelligence Core for VoiceShield — one coordinated intelligence layer, multiple integration surfaces, and a validated path from audio input to analysis result.*
+**Security is the problem we solve; multilingual intelligence is how we make the solution more capable.**
